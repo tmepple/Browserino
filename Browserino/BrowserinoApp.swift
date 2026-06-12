@@ -177,7 +177,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         
         NSApplication.shared.activate(ignoringOtherApps: true)
         selectorWindow!.deactivateDelay()
-        
+
+        let twoColumns = UserDefaults.standard.bool(forKey: "twoColumnBrowsers")
+        let targetWidth: CGFloat = twoColumns ? BrowserinoWindow.twoColumnWidth : BrowserinoWindow.selectorWidth
+        if abs(selectorWindow!.frame.width - targetWidth) > 1 {
+            selectorWindow!.minSize = NSSize(width: targetWidth, height: BrowserinoWindow.selectorHeight)
+            selectorWindow!.setContentSize(NSSize(width: targetWidth, height: selectorWindow!.frame.height))
+        }
+
         selectorWindow!.contentView = NSHostingView(
             rootView: PromptView(
                 urls: processedUrls

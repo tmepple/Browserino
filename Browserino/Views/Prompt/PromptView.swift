@@ -27,6 +27,7 @@ struct PromptView: View {
     @AppStorage("copy_closeAfterCopy") private var closeAfterCopy: Bool = false
     @AppStorage("copy_alternativeShortcut") private var alternativeShortcut: Bool = false
     @AppStorage("apps_atTop") private var appsAtTop: Bool = true
+    @AppStorage("twoColumnBrowsers") private var twoColumnBrowsers: Bool = false
 
     let urls: [URL]
 
@@ -88,6 +89,10 @@ struct PromptView: View {
 
     var totalItemCount: Int {
         pickerBrowserItems.count + appsForUrls.count
+    }
+
+    var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible()), count: twoColumnBrowsers ? 2 : 1)
     }
 
     func openUrlsInApp(app: App) {
@@ -173,24 +178,26 @@ struct PromptView: View {
                             Divider()
                         }
 
-                        ForEach(Array(pickerBrowserItems.enumerated()), id: \.element.id) {
-                            index, item in
-                            if let bundle = Bundle(url: item.appURL) {
-                                PromptItem(
-                                    browser: item.appURL,
-                                    urls: urls,
-                                    bundle: bundle,
-                                    shortcut: item.shortcutKey,
-                                    displayName: item.displayName
-                                ) {
-                                    openBrowserItem(item, isIncognito: NSEvent.modifierFlags.contains(.shift))
-                                }
-                                .id(index + (appsAtTop ? appsForUrls.count : 0))
-                                .buttonStyle(
-                                    SelectButtonStyle(
-                                        selected: selected == index + (appsAtTop ? appsForUrls.count : 0)
+                        LazyVGrid(columns: gridColumns, spacing: 2) {
+                            ForEach(Array(pickerBrowserItems.enumerated()), id: \.element.id) {
+                                index, item in
+                                if let bundle = Bundle(url: item.appURL) {
+                                    PromptItem(
+                                        browser: item.appURL,
+                                        urls: urls,
+                                        bundle: bundle,
+                                        shortcut: item.shortcutKey,
+                                        displayName: item.displayName
+                                    ) {
+                                        openBrowserItem(item, isIncognito: NSEvent.modifierFlags.contains(.shift))
+                                    }
+                                    .id(index + (appsAtTop ? appsForUrls.count : 0))
+                                    .buttonStyle(
+                                        SelectButtonStyle(
+                                            selected: selected == index + (appsAtTop ? appsForUrls.count : 0)
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
 

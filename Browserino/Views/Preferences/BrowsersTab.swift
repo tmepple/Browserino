@@ -11,6 +11,7 @@ struct BrowsersTab: View {
     @AppStorage("browsers") private var browsers: [URL] = []
     @AppStorage("hiddenBrowsers") private var hiddenBrowsers: [URL] = []
     @AppStorage("privateArgs") private var privateArgs: [String: String] = [:]
+    @AppStorage("twoColumnBrowsers") private var twoColumnBrowsers: Bool = false
 
     private func move(from source: IndexSet, to destination: Int) {
         browsers.move(fromOffsets: source, toOffset: destination)
@@ -92,6 +93,10 @@ struct BrowsersTab: View {
                     )
                 }
             }
+
+            Toggle("Show browsers in two columns (widens the prompt)", isOn: $twoColumnBrowsers)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
 
             Text(
                 "Drag and drop to reorder. Press record to assign a shortcut. Click on eye to hide unwanted browsers from prompt"
