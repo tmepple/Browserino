@@ -18,17 +18,12 @@ struct ProfilesTab: View {
     private func detectProfiles() {
         let detected = ChromeProfileUtil.detectProfiles()
 
-        var merged: [ChromeProfile] = []
-        for profile in detected {
-            if let existing = chromeProfiles.first(where: { $0.directoryName == profile.directoryName }) {
-                merged.append(ChromeProfile(
-                    directoryName: existing.directoryName,
-                    displayName: existing.displayName,
-                    isHidden: existing.isHidden
-                ))
-            } else {
-                merged.append(profile)
-            }
+        // Keep existing profiles in their user-arranged order, then append new ones.
+        var merged: [ChromeProfile] = chromeProfiles.filter { existing in
+            detected.contains { $0.directoryName == existing.directoryName }
+        }
+        for profile in detected where !merged.contains(where: { $0.directoryName == profile.directoryName }) {
+            merged.append(profile)
         }
 
         chromeProfiles = merged
@@ -69,6 +64,12 @@ struct ProfilesTab: View {
                 List {
                     ForEach(Array(chromeProfiles.enumerated()), id: \.element.directoryName) { index, profile in
                         HStack {
+                            Image(systemName: "line.3.horizontal")
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+                                .frame(width: 8)
+
                             TextField("Display name", text: displayName(at: index))
                                 .font(.system(size: 14))
                                 .frame(maxWidth: 200)
@@ -101,9 +102,12 @@ struct ProfilesTab: View {
                         }
                         .padding(10)
                     }
+                    .onMove { indices, newOffset in
+                        chromeProfiles.move(fromOffsets: indices, toOffset: newOffset)
+                    }
                 }
 
-                Text("Detect Chrome profiles and show them as separate picker items. Assign shortcuts and hide profiles you don't use.")
+                Text("Detect Chrome profiles and show them as separate picker items. Assign shortcuts, hide profiles you don't use, and drag to reorder them in the picker.")
                     .font(.subheadline)
                     .foregroundStyle(.primary.opacity(0.5))
                     .frame(maxWidth: .infinity)
