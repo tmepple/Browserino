@@ -74,7 +74,9 @@ echo "Team:     $TEAM_ID"
 echo "Version:  $VERSION"
 
 command -v op >/dev/null || die "1Password CLI (op) not found"
-op whoami >/dev/null 2>&1 || die "not signed into 1Password account '$OP_ACCOUNT'; run: op signin --account $OP_ACCOUNT"
+# `op whoami` reports "not signed in" under desktop-app integration (op 2.34.x) even when
+# auth works; `op user get --me` does the real app handshake, so use it as the preflight.
+op user get --me >/dev/null 2>&1 || die "cannot authenticate to 1Password account '$OP_ACCOUNT'; unlock the 1Password app (or run: op signin --account $OP_ACCOUNT)"
 
 # ---- 2. notary credentials from 1Password (rendered to temp, removed on exit) ----
 P8="$(mktemp -t browserino-notary)"
