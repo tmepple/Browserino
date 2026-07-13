@@ -22,7 +22,7 @@ struct AboutTab: View {
             .font(.title)
             .frame(maxWidth: .infinity)
 
-            Text("TME Fork · 2026-06-01")
+            Text("TME Fork · 2026-07-13")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
