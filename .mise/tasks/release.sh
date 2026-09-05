@@ -6,14 +6,13 @@
 #
 # One-time setup required before the first run (see CLAUDE.md "Signed release"):
 #   1. A "Developer ID Application" cert installed (EPCO Concepts team).
-#   2. A shared App Store Connect API key (.p8) for the EPCO team, stored in 1Password as
-#      item "EPCO-ASC-API" with fields: issuer, key-id, key (the .p8 contents).
+#   2. A shared App Store Connect API key for the EPCO team, stored in 1Password as item
+#      "EPCO-ASC-API" (fields issuer + key-id) plus the .p8 as document "EPCO-ASC-API-key".
 set -euo pipefail
 
 # ---- config ----
 REPO="tmepple/Browserino"                 # fork (GitHub releases live here)
-TAP_REPO="tmepple/homebrew-tap"           # cask lives here
-TAP_BRANCH="master"
+TAP_DIR="${HOME}/Code/homebrew-tap"       # shared clone of tmepple/homebrew-tap; the cask lives here
 TAP_NAME="tmepple/tap"                    # brew-facing tap name
 BUNDLE_ID="xyz.alexstrnik.Browserino"
 SCHEME="Browserino"
@@ -43,17 +42,20 @@ TAG="v${VERSION}"
 # ---- temp workspace + cleanup ----
 P8=""
 WORK=""
-TAP_CLONE=""
 cleanup() {
-  [[ -n "$P8"        && -f "$P8"        ]] && rm -f "$P8"
-  [[ -n "$WORK"      && -d "$WORK"      ]] && rm -rf "$WORK"
-  [[ -n "$TAP_CLONE" && -d "$TAP_CLONE" ]] && rm -rf "$TAP_CLONE"
+  [[ -n "$P8"   && -f "$P8"   ]] && rm -f "$P8"
+  [[ -n "$WORK" && -d "$WORK" ]] && rm -rf "$WORK"
 }
 trap cleanup EXIT
 
 # ---- 1. preflight ----
 [[ -z "$(git status --porcelain)" ]] || die "git tree not clean; commit or stash first"
 git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists"
+
+# The cask is committed into the shared tap clone, so it has to be clean and current
+[[ -d "$TAP_DIR/.git" ]] || die "homebrew tap not found at $TAP_DIR"
+[[ -z "$(git -C "$TAP_DIR" status --porcelain)" ]] || die "uncommitted changes in $TAP_DIR; commit or stash first"
+git -C "$TAP_DIR" pull --rebase --quiet
 
 DEVID_LINE="$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 || true)"
 if [[ -z "$DEVID_LINE" ]]; then
@@ -118,12 +120,21 @@ echo "==> Notarizing (automated scan, typically 1-3 min)..."
 ditto -c -k --keepParent "$APP" "$WORK/notarize.zip"
 xcrun notarytool submit "$WORK/notarize.zip" \
   --key "$P8" --key-id "$KEY_ID" --issuer "$ISSUER_ID" \
-  --wait
+  --wait --timeout 30m --output-format json > "$WORK/notarize.json"
+# Read Apple's verdict explicitly (and fetch its log when rejected) rather than
+# trusting the exit status
+SUBMISSION_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$WORK/notarize.json")"
+STATUS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$WORK/notarize.json")"
+echo "Notarization $STATUS (submission $SUBMISSION_ID)"
+if [[ "$STATUS" != "Accepted" ]]; then
+  xcrun notarytool log "$SUBMISSION_ID" --key "$P8" --key-id "$KEY_ID" --issuer "$ISSUER_ID" >&2 || true
+  die "notarization was not accepted"
+fi
 
 echo "==> Stapling ticket..."
 xcrun stapler staple "$APP"
 xcrun stapler validate "$APP"
-spctl -a -vvv "$APP" || true
+spctl -a -vv "$APP"
 
 # ---- 5. package the stapled app ----
 ASSET="$WORK/Browserino-${VERSION}.zip"
@@ -142,11 +153,9 @@ gh release create "$TAG" "$ASSET" \
   --notes "tmepple fork of Browserino v${MARKETING_VERSION} (build ${BUILD_DATE}). Developer ID signed + notarized."
 
 # ---- 7. update the cask in the tap ----
-echo "==> Updating cask in $TAP_REPO..."
-TAP_CLONE="$(mktemp -d)"
-git clone --depth 1 --branch "$TAP_BRANCH" "git@github.com:${TAP_REPO}.git" "$TAP_CLONE"
-mkdir -p "$TAP_CLONE/Casks"
-cat > "$TAP_CLONE/Casks/browserino-tme.rb" <<EOF
+echo "==> Updating cask in $TAP_DIR..."
+mkdir -p "$TAP_DIR/Casks"
+cat > "$TAP_DIR/Casks/browserino-tme.rb" <<EOF
 cask "browserino-tme" do
   version "${VERSION}"
   sha256 "${SHA256}"
@@ -156,16 +165,19 @@ cask "browserino-tme" do
   desc "Browser picker — tmepple fork"
   homepage "https://github.com/${REPO}"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "Browserino.app"
+
+  # Upgrades quit a running Browserino before swapping the bundle
+  uninstall quit: "${BUNDLE_ID}"
 
   zap trash: ["~/Library/Preferences/${BUNDLE_ID}.plist"]
 end
 EOF
-git -C "$TAP_CLONE" add Casks/browserino-tme.rb
-git -C "$TAP_CLONE" commit -m "browserino-tme ${VERSION}"
-git -C "$TAP_CLONE" push origin "$TAP_BRANCH"
+git -C "$TAP_DIR" add Casks/browserino-tme.rb
+git -C "$TAP_DIR" commit -m "browserino-tme ${VERSION}"
+git -C "$TAP_DIR" push
 
 # ---- done ----
 cat <<EOF

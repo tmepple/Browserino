@@ -82,8 +82,10 @@ it takes minutes, has no human approval step, and once the ticket is **stapled**
 app launches on any Mac with no Gatekeeper prompt and no `xattr` fiddling.
 
 The whole flow is one task: `mise run release [build-date]` (see `.mise/tasks/release.sh`).
-It builds → signs (Developer ID, hardened runtime, secure timestamp) → notarizes →
-staples → cuts a GitHub release on the fork → rewrites `Casks/browserino-tme.rb` in the tap.
+It builds → signs (Developer ID, hardened runtime, secure timestamp) → notarizes (failing
+with Apple's log if the verdict isn't *Accepted*) → staples → cuts a GitHub release on the
+fork → rewrites `Casks/browserino-tme.rb` in the shared tap clone at `~/Code/homebrew-tap`
+(which must be clean; the task pulls it first, commits `browserino-tme <version>`, pushes).
 
 ### One-time setup (per machine that cuts releases)
 
@@ -140,3 +142,5 @@ cask "browserino-tme"
 brew install --cask tmepple/tap/browserino-tme   # first install
 brew upgrade --cask browserino-tme               # after a new release here
 ```
+
+The cask quits a running Browserino before an upgrade swaps the bundle (`uninstall quit:`).
